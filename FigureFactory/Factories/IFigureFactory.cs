@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 
 namespace FigureFactory.Factories
 {
-    public abstract class SquareCreator
+    public interface IFigureFactory
     {
-        public abstract Square CreateSquare();
+        Circle CreateCircle();
+        Square CreateSquare();
+        Triangle CreateTriangle();
     }
 }

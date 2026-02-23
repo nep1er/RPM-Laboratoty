@@ -15,22 +15,17 @@ namespace FigureFactory
 {
     public partial class MainWindow : Window
     {
-        private CircleCreator _currentCircleCreator;
-        private SquareCreator _currentSquareCreator;
-        private TriangleCreator _currentTriangleCreator;
+        private IFigureFactory _currentFactory;
 
         public MainWindow()
         {
             InitializeComponent();
             ColorComboBox.SelectionChanged += ColorComboBox_SelectionChanged;
 
-
-            UpdateCreatorsBasedOnColor();
-
+            _currentFactory = new RedFactory();
         }
 
-
-        private void UpdateCreatorsBasedOnColor()
+        private void ColorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var selectedItem = ColorComboBox.SelectedItem as ComboBoxItem;
             if (selectedItem == null) return;
@@ -40,57 +35,44 @@ namespace FigureFactory
             switch (color)
             {
                 case "Red":
-                    _currentCircleCreator = new RedCircleCreator();
-                    _currentSquareCreator = new RedSquareCreator();
-                    _currentTriangleCreator = new RedTriangleCreator();
-
+                    _currentFactory = new RedFactory();
                     break;
 
                 case "Blue":
-                    _currentCircleCreator = new BlueCircleCreator();
-                    _currentSquareCreator = new BlueSquareCreator();
-                    _currentTriangleCreator = new BlueTriangleCreator();
-
+                    _currentFactory = new BlueFactory();
                     break;
 
                 case "Green":
-                    _currentCircleCreator = new GreenCircleCreator();
-                    _currentSquareCreator = new GreenSquareCreator();
-                    _currentTriangleCreator = new GreenTriangleCreator();
-
+                    _currentFactory = new GreenFactory();
                     break;
 
                 default: return;
             }
-        }
 
-        private void ColorComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            UpdateCreatorsBasedOnColor();
             ClearAllFigures();
         }
 
         private void AddCircleButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentCircleCreator == null) return;
+            if (_currentFactory == null) return;
 
-            Circle circle = _currentCircleCreator.CreateCircle();
+            Circle circle = _currentFactory.CreateCircle();
             FiguresPanel.Children.Add(circle.CreateUIElement());
         }
 
         private void AddSquareButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentSquareCreator == null) return;
+            if (_currentFactory == null) return;
 
-            Square square = _currentSquareCreator.CreateSquare();
+            Square square = _currentFactory.CreateSquare();
             FiguresPanel.Children.Add(square.CreateUIElement());
         }
 
         private void AddTriangleButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_currentTriangleCreator == null) return;
+            if (_currentFactory == null) return;
 
-            Triangle triangle = _currentTriangleCreator.CreateTriangle();
+            Triangle triangle = _currentFactory.CreateTriangle();
             FiguresPanel.Children.Add(triangle.CreateUIElement());
         }
 
