@@ -1,0 +1,150 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ClassDiagram MajorVersion="1" MinorVersion="1">
+  <Class Name="DocumentRenderingEngine.Domain.Document.Document" Collapsed="true">
+    <Position X="4.5" Y="4" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAQAAAAAAAAAAIAAAAAIAAIAAAAAAAAAAA=</HashCode>
+      <FileName>Domain\Document\Document.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Document.Page" Collapsed="true">
+    <Position X="4.5" Y="4.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAIAAAAAAAAAAAAAAAAAAAAAEAAAAAAAABAAAAAAAAA=</HashCode>
+      <FileName>Domain\Document\Page.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Shapes.Ellipse" Collapsed="true">
+    <Position X="8.25" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAABAAAIAIQAAgAAAAAgAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Domain\Shapes\Ellipse.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Shapes.Line" Collapsed="true">
+    <Position X="10" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAIAIQAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Domain\Shapes\Line.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Shapes.Rectangle" Collapsed="true">
+    <Position X="11.75" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAIAISAAgAAAAAAAAAAABAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Domain\Shapes\Rectangle.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Text.Character" Collapsed="true">
+    <Position X="6.25" Y="4.75" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAAAAAAAAAAAICAAAAAAAAAAAQAAAA=</HashCode>
+      <FileName>Domain\Text\Character.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Domain.Text.CharacterFactory" Collapsed="true">
+    <Position X="6.25" Y="4" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAYAAAAAAAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Domain\Text\CharacterFactory.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.BorderDecorator" Collapsed="true">
+    <Position X="10" Y="4" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAAAAAAAAAAAEAAAAAAAAAAAAAAAIA=</HashCode>
+      <FileName>Effects\BorderDecorator.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.DrawableDecorator" Collapsed="true">
+    <Position X="10" Y="5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAAAgAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Effects\DrawableDecorator.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Orientation="Left" Position="0.218" />
+  </Class>
+  <Class Name="DocumentRenderingEngine.ShadowDecorator" Collapsed="true">
+    <Position X="8.25" Y="4" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAACAAAAkAAAAEAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Effects\ShadowDecorator.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Engine.Effects.TransparencyDecorator" Collapsed="true">
+    <Position X="11.75" Y="4" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAEAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Effects\TransparencyDecorator.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Engine.Media.HighResolutionImage" Collapsed="true">
+    <Position X="6.25" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAABAAAAAACAAgQAAAAAAABAABAAAAAAAAAAAEAAAAg=</HashCode>
+      <FileName>Media\HighResolutionImage.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="DocumentRenderingEngine.Engine.Media.ImageProxy" Collapsed="true">
+    <Position X="6.25" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgQAEAAAAABIAAAAAAAAAAAAAEAAAAA=</HashCode>
+      <FileName>Media\ImageProxy.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Class Name="DocumentRenderingEngine.PrintRenderer" Collapsed="true">
+    <Position X="11.75" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAAAACAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAAAE=</HashCode>
+      <FileName>Rendering\PrintRenderer.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.152" />
+  </Class>
+  <Class Name="DocumentRenderingEngine.Engine.Rendering.ScreenRenderer" Collapsed="true">
+    <Position X="8.25" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAAAACAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAAAE=</HashCode>
+      <FileName>Rendering\ScreenRenderer.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.267" />
+  </Class>
+  <Class Name="Program" Collapsed="true">
+    <Position X="4.5" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAA=</HashCode>
+      <FileName>Program.cs</FileName>
+    </TypeIdentifier>
+  </Class>
+  <Class Name="DocumentRenderingEngine.Engine.Core.GraphicObject" Collapsed="true">
+    <Position X="10" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAIAAAgAAAAAAAAAAAAAAAAAIAAAAAAAAAAA=</HashCode>
+      <FileName>Core\GraphicObject.cs</FileName>
+    </TypeIdentifier>
+    <Lollipop Position="0.2" />
+  </Class>
+  <Interface Name="DocumentRenderingEngine.Engine.Core.Interfaces.IRenderingEngine" Collapsed="true">
+    <Position X="10.25" Y="0.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>ACAAAAAACAAAAgAAAAAAAAAAAAAAAEAAAAAAAAAAAAE=</HashCode>
+      <FileName>Core\Interfaces\IRenderingEngine.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Interface Name="DocumentRenderingEngine.Engine.Core.Interfaces.IImage" Collapsed="true">
+    <Position X="4.5" Y="1.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAEAAAAA=</HashCode>
+      <FileName>Core\Interfaces\IImage.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Interface Name="DocumentRenderingEngine.Engine.Core.Interfaces.IDrawable" Collapsed="true">
+    <Position X="4.5" Y="2.5" Width="1.5" />
+    <TypeIdentifier>
+      <HashCode>AAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</HashCode>
+      <FileName>Core\Interfaces\IDrawable.cs</FileName>
+    </TypeIdentifier>
+  </Interface>
+  <Font Name="Segoe UI" Size="9" />
+</ClassDiagram>
