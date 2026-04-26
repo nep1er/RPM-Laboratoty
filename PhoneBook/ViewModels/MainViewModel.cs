@@ -1,20 +1,25 @@
 ﻿using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows.Input;
 using PhoneBook.Models;
+using PhoneBook.Services;
 
 namespace PhoneBook.ViewModels
 {
     //Главная модель представления приложения.
     //Управляет списком контактов и командами пользователя.
+    //Зависимости внедряются через конструктор (Constructor Injection).
 
     public class MainViewModel : ObservableObject
     {
+        private readonly IDialogService _dialogService;
+
         public ObservableCollection<Contact> Contacts { get; }
 
-        // Поля для ввода новых данных
         private string _name = string.Empty;
         private string _phone = string.Empty;
         private Contact? _selectedContact;
+
         public string Name
         {
             get => _name;
@@ -36,9 +41,12 @@ namespace PhoneBook.ViewModels
         public ICommand AddCommand { get; }
         public ICommand DeleteCommand { get; }
 
-
-        public MainViewModel()
+        //Конструктор с внедрением зависимости через Constructor Injection.
+        public MainViewModel(IDialogService dialogService)
         {
+            _dialogService = dialogService
+                ?? throw new System.ArgumentNullException(nameof(dialogService));
+
             Contacts = new ObservableCollection<Contact>();
 
             AddCommand = new RelayCommand(AddContact, CanAddContact);
@@ -50,15 +58,21 @@ namespace PhoneBook.ViewModels
             if (!CanAddContact())
                 return;
 
+            if (Contacts.Any(c => c.Phone == Phone))
+            {
+                _dialogService.ShowWarning(
+                    "Контакт с таким номером телефона уже существует!",
+                    "Дубликат");
+                return;
+            }
+
             var contact = new Contact(Name, Phone);
 
             if (!contact.Validate())
             {
-                System.Windows.MessageBox.Show(
+                _dialogService.ShowError(
                     "Проверьте корректность введённых данных.",
-                    "Ошибка валидации",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
+                    "Ошибка валидации");
                 return;
             }
 
@@ -67,6 +81,10 @@ namespace PhoneBook.ViewModels
             Name = string.Empty;
             Phone = string.Empty;
 
+            _dialogService.ShowInfo(
+                $"Контакт \"{contact.Name}\" успешно добавлен.",
+                "Успех");
+
             CommandManager.InvalidateRequerySuggested();
         }
 
@@ -74,14 +92,29 @@ namespace PhoneBook.ViewModels
         {
             return !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Phone);
         }
+
         private void DeleteContact(Contact? contact)
         {
-            if (contact != null && Contacts.Contains(contact))
+            if (contact == null)
+                return;
+
+            bool confirmed = _dialogService.ShowConfirmation(
+                $"Вы действительно хотите удалить контакт \"{contact.Name}\"?",
+                "Подтверждение удаления");
+
+            if (!confirmed)
+                return;
+
+            if (Contacts.Contains(contact))
             {
                 Contacts.Remove(contact);
+                _dialogService.ShowInfo(
+                    $"Контакт \"{contact.Name}\" удалён.",
+                    "Удалено");
                 CommandManager.InvalidateRequerySuggested();
             }
         }
+
         private bool CanDeleteContact(Contact? contact)
         {
             return contact != null;
