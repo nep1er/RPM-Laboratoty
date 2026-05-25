@@ -1,8 +1,25 @@
 ﻿<Application x:Class="PhoneBook.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:PhoneBook">
+             xmlns:vm="clr-namespace:PhoneBook.ViewModels"
+             xmlns:v="clr-namespace:PhoneBook.Views">
+
     <Application.Resources>
-         
+        <!-- DataTemplate для автоматического выбора View по ViewModel -->
+
+        <!-- Экран списка контактов -->
+        <DataTemplate DataType="{x:Type vm:ContactsListViewModel}">
+            <v:ContactsListView />
+        </DataTemplate>
+
+        <!-- Экран редактирования контакта -->
+        <DataTemplate DataType="{x:Type vm:ContactEditViewModel}">
+            <v:ContactEditView />
+        </DataTemplate>
+
+        <!-- Экран "О программе" -->
+        <DataTemplate DataType="{x:Type vm:AboutViewModel}">
+            <v:AboutView />
+        </DataTemplate>
     </Application.Resources>
 </Application>

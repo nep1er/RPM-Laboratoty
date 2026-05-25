@@ -3,8 +3,11 @@ using PhoneBook.ViewModels;
 
 namespace PhoneBook.Models
 {
-    // Модель контакта телефонной книги.
-    // Хранит данные и обеспечивает их валидацию.
+    /// <summary>
+    /// Модель контакта телефонной книги.
+    ///Хранит данные и обеспечивает их валидацию.
+    /// <summary>
+
     public class Contact : ObservableObject
     {
         private string _name = string.Empty;
@@ -42,6 +45,7 @@ namespace PhoneBook.Models
                 return false;
 
             var cleanPhone = Phone.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
+
 
             if (cleanPhone.StartsWith("+7"))
                 return cleanPhone.Length == 12 && cleanPhone.Substring(2).All(char.IsDigit);
