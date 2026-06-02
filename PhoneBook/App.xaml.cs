@@ -1,14 +1,12 @@
 ﻿using System.Windows;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using PhoneBook.Data;
 using PhoneBook.Services;
 using PhoneBook.ViewModels;
 
 namespace PhoneBook
 {
-    /// <summary>
-    /// Точка входа в приложение.
-    /// Настраивает DI-контейнер с поддержкой навигации.
-    /// </summary>
     public partial class App : Application
     {
         protected override void OnStartup(StartupEventArgs e)
@@ -17,26 +15,29 @@ namespace PhoneBook
 
             var services = new ServiceCollection();
 
-            // 1. Сервисы
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<INavigationService, NavigationService>();
 
-            // 2. Репозиторий данных (Singleton — данные должны сохраняться!)
-            services.AddSingleton<IContactRepository, ContactRepository>();
+            //Регистрация DbContext и репозитория
+            services.AddDbContext<PhoneBookDbContext>(options =>
+                options.UseSqlServer(
+                    "Data Source=.\\SQLEXPRESS;Initial Catalog=PhoneBookDB;Integrated Security=True;TrustServerCertificate=True"));
 
-            // 3. ViewModel для экранов (Transient — новый экземпляр при навигации)
+            services.AddScoped<IContactRepository, EfContactRepository>();
+
+            // Transient для навигации
             services.AddTransient<ContactsListViewModel>();
             services.AddTransient<ContactEditViewModel>();
             services.AddTransient<AboutViewModel>();
 
-            // 4. ViewModel оболочки (Singleton)
+            //ViewModel оболочки
             services.AddSingleton<MainWindowViewModel>();
 
-            // 5. Главное окно
-            services.AddSingleton<MainWindow>(serviceProvider =>
+            //Главное окно
+            services.AddSingleton<MainWindow>(sp =>
             {
                 var window = new MainWindow();
-                window.DataContext = serviceProvider.GetRequiredService<MainWindowViewModel>();
+                window.DataContext = sp.GetRequiredService<MainWindowViewModel>();
                 return window;
             });
 

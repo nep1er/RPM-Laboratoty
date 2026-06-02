@@ -1,18 +1,18 @@
 ﻿using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using PhoneBook.Models;
 
 namespace PhoneBook.Services
 {
     /// <summary>
-    /// Интерфейс репозитория для хранения и управления контактами.
-    /// Позволяет сохранять данные между экземплярами ViewModel.
+    /// Интерфейс репозитория контактов с поддержкой асинхронных операций.
     /// </summary>
     public interface IContactRepository
     {
-        ObservableCollection<Contact> Contacts { get; }
-
-        void AddContact(Contact contact);
-        void RemoveContact(Contact contact);
-        bool ContactWithPhoneExists(string phone, Contact? exclude = null);
+        Task<ObservableCollection<Contact>> GetAllContactsAsync();
+        Task<bool> AddContactAsync(Contact contact);
+        Task<bool> UpdateContactAsync(Contact contact);
+        Task<bool> DeleteContactAsync(int id);
+        Task<bool> ContactWithPhoneExistsAsync(string phone, int? excludeId = null);
     }
 }

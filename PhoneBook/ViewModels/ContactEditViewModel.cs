@@ -1,21 +1,23 @@
-﻿using PhoneBook.Models;
-using PhoneBook.Services;
+﻿using System.Threading.Tasks;
 using System.Windows.Input;
+using PhoneBook.Models;
+using PhoneBook.Services;
 
 namespace PhoneBook.ViewModels
 {
     /// <summary>
-    /// ViewModel для экрана редактирования контакта.
+    /// ViewModel для экрана редактирования контакта с интеграцией БД.
     /// </summary>
     public class ContactEditViewModel : ObservableObject, INavigationAware
     {
         private readonly INavigationService _navigationService;
         private readonly IDialogService _dialogService;
         private readonly IContactRepository _contactRepository;
-        private Contact? _contact;
 
+        private Contact? _contact;
         private string _editName = string.Empty;
         private string _editPhone = string.Empty;
+        private bool _isLoading;
 
         public string EditName
         {
@@ -43,6 +45,12 @@ namespace PhoneBook.ViewModels
             }
         }
 
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => Set(ref _isLoading, value);
+        }
+
         public ICommand SaveCommand { get; }
         public ICommand CancelCommand { get; }
 
@@ -58,7 +66,7 @@ namespace PhoneBook.ViewModels
             _contactRepository = contactRepository
                 ?? throw new System.ArgumentNullException(nameof(contactRepository));
 
-            SaveCommand = new RelayCommand(SaveContact);
+            SaveCommand = new AsyncRelayCommand(SaveContactAsync);
             CancelCommand = new RelayCommand(CancelEditing);
         }
 
@@ -77,7 +85,7 @@ namespace PhoneBook.ViewModels
             }
         }
 
-        private void SaveContact()
+        private async Task SaveContactAsync()
         {
             if (string.IsNullOrWhiteSpace(EditName) || string.IsNullOrWhiteSpace(EditPhone))
             {
@@ -88,22 +96,42 @@ namespace PhoneBook.ViewModels
             if (_contact != null && !_contact.Validate())
             {
                 _dialogService.ShowError(
-                    "Неверный формат номера телефона. Используйте формат: +7XXXXXXXXXX или XXXXXXXXXX",
+                    "Неверный формат номера телефона. Используйте формат: +7XXXXXXXXXX",
                     "Ошибка валидации");
                 return;
             }
 
-            if (_contact != null && _contactRepository.ContactWithPhoneExists(EditPhone, _contact))
+            if (_contact != null &&
+                await _contactRepository.ContactWithPhoneExistsAsync(EditPhone, _contact.Id))
             {
                 _dialogService.ShowWarning(
-                    "Контакт с таким номером телефона уже существует!",
-                    "Дубликат");
+                    "Контакт с таким номером телефона уже существует!", "Дубликат");
                 return;
             }
 
+            IsLoading = true;
+            try
+            {
+                if (_contact != null)
+                {
+                    var result = await _contactRepository.UpdateContactAsync(_contact);
 
-            _dialogService.ShowInfo($"Контакт \"{_contact?.Name}\" обновлён", "Успех");
-            _navigationService.NavigateTo<ContactsListViewModel>();
+                    if (result)
+                    {
+                        _dialogService.ShowInfo(
+                            $"Контакт \"{_contact.Name}\" обновлён", "Успех");
+                        _navigationService.NavigateTo<ContactsListViewModel>();
+                    }
+                    else
+                    {
+                        _dialogService.ShowError("Не удалось сохранить изменения.", "Ошибка");
+                    }
+                }
+            }
+            finally
+            {
+                IsLoading = false;
+            }
         }
 
         private void CancelEditing()

@@ -1,14 +1,13 @@
-﻿using PhoneBook.Models;
-using PhoneBook.Services;
-using System.Collections.ObjectModel;
-using System.Linq;
+﻿using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using System.Windows.Input;
+using PhoneBook.Models;
+using PhoneBook.Services;
 
 namespace PhoneBook.ViewModels
 {
     /// <summary>
-    /// ViewModel для экрана списка контактов.
-    /// Использует IContactRepository для сохранения данных между навигациями.
+    /// ViewModel для экрана списка контактов с интеграцией базы данных.
     /// </summary>
     public class ContactsListViewModel : ObservableObject, INavigationAware
     {
@@ -16,13 +15,17 @@ namespace PhoneBook.ViewModels
         private readonly INavigationService _navigationService;
         private readonly IContactRepository _contactRepository;
 
-        // Поля для ввода новых данных
+        private ObservableCollection<Contact> _contacts = new();
         private string _name = string.Empty;
         private string _phone = string.Empty;
         private Contact? _selectedContact;
+        private bool _isLoading;
 
-        // Коллекция контактов берётся из репозитория (общая для приложения)
-        public ObservableCollection<Contact> Contacts => _contactRepository.Contacts;
+        public ObservableCollection<Contact> Contacts
+        {
+            get => _contacts;
+            private set => Set(ref _contacts, value);
+        }
 
         public string Name
         {
@@ -42,9 +45,16 @@ namespace PhoneBook.ViewModels
             set => Set(ref _selectedContact, value);
         }
 
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => Set(ref _isLoading, value);
+        }
+
         public ICommand AddCommand { get; }
         public ICommand DeleteCommand { get; }
         public ICommand EditContactCommand { get; }
+        public ICommand RefreshCommand { get; }
 
         public ContactsListViewModel(
             IDialogService dialogService,
@@ -58,37 +68,53 @@ namespace PhoneBook.ViewModels
             _contactRepository = contactRepository
                 ?? throw new System.ArgumentNullException(nameof(contactRepository));
 
-            AddCommand = new RelayCommand(AddContact, CanAddContact);
-            DeleteCommand = new RelayCommand<Contact>(DeleteContact, CanDeleteContact);
+            // Асинхронные команды для работы с БД
+            AddCommand = new AsyncRelayCommand(AddContactAsync, CanAddContact);
+            DeleteCommand = new AsyncRelayCommand<Contact>(DeleteContactAsync, CanDeleteContact);
             EditContactCommand = new RelayCommand<Contact>(EditContact, CanEditContact);
+            RefreshCommand = new AsyncRelayCommand(LoadContactsAsync);
         }
 
         /// <summary>
-        /// Вызывается при навигации к этому экрану.
-        /// Очищает поля ввода для нового контакта.
+        /// Загружает контакты из базы данных при навигации к экрану.
         /// </summary>
-        public void OnNavigatedTo(object? parameter)
+        public async void OnNavigatedTo(object? parameter)
         {
-            // Сбрасываем поля ввода при возврате к списку
+            await LoadContactsAsync();
             Name = string.Empty;
             Phone = string.Empty;
             SelectedContact = null;
-
-            // Уведомляем об изменении состояния команд
-            CommandManager.InvalidateRequerySuggested();
         }
 
-        private void AddContact()
+        /// <summary>
+        /// Загрузка контактов из базы данных.
+        /// </summary>
+        private async Task LoadContactsAsync()
+        {
+            IsLoading = true;
+            try
+            {
+                Contacts = await _contactRepository.GetAllContactsAsync();
+            }
+            catch (System.Exception ex)
+            {
+                _dialogService.ShowError($"Ошибка загрузки: {ex.Message}", "Ошибка");
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        private async Task AddContactAsync()
         {
             if (!CanAddContact())
                 return;
 
-            // Проверка дубликата через репозиторий
-            if (_contactRepository.ContactWithPhoneExists(Phone))
+            if (await _contactRepository.ContactWithPhoneExistsAsync(Phone))
             {
                 _dialogService.ShowWarning(
-                    "Контакт с таким номером телефона уже существует!",
-                    "Дубликат");
+                    "Контакт с таким номером телефона уже существует!", "Дубликат");
                 return;
             }
 
@@ -97,30 +123,37 @@ namespace PhoneBook.ViewModels
             if (!contact.Validate())
             {
                 _dialogService.ShowError(
-                    "Проверьте корректность введённых данных.",
-                    "Ошибка валидации");
+                    "Проверьте корректность введённых данных.", "Ошибка валидации");
                 return;
             }
 
-            // Добавление через репозиторий
-            _contactRepository.AddContact(contact);
+            var result = await _contactRepository.AddContactAsync(contact);
 
-            Name = string.Empty;
-            Phone = string.Empty;
+            if (result)
+            {
+                // Обновляем локальную коллекцию
+                Contacts.Add(contact);
 
-            _dialogService.ShowInfo(
-                $"Контакт \"{contact.Name}\" успешно добавлен.",
-                "Успех");
+                Name = string.Empty;
+                Phone = string.Empty;
 
-            CommandManager.InvalidateRequerySuggested();
+                _dialogService.ShowInfo(
+                    $"Контакт \"{contact.Name}\" успешно добавлен.", "Успех");
+            }
+            else
+            {
+                _dialogService.ShowError("Не удалось добавить контакт.", "Ошибка");
+            }
         }
 
         private bool CanAddContact()
         {
-            return !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Phone);
+            return !string.IsNullOrWhiteSpace(Name) &&
+                   !string.IsNullOrWhiteSpace(Phone) &&
+                   !IsLoading;
         }
 
-        private void DeleteContact(Contact? contact)
+        private async Task DeleteContactAsync(Contact? contact)
         {
             if (contact == null)
                 return;
@@ -132,21 +165,24 @@ namespace PhoneBook.ViewModels
             if (!confirmed)
                 return;
 
+            var result = await _contactRepository.DeleteContactAsync(contact.Id);
 
-
-            _contactRepository.RemoveContact(contact);
-
-            _dialogService.ShowInfo(
-                $"Контакт \"{contact.Name}\" удалён.",
-                "Удалено");
-
-            SelectedContact = null;
-            CommandManager.InvalidateRequerySuggested();
+            if (result)
+            {
+                Contacts.Remove(contact);
+                _dialogService.ShowInfo(
+                    $"Контакт \"{contact.Name}\" удалён.", "Удалено");
+                SelectedContact = null;
+            }
+            else
+            {
+                _dialogService.ShowError("Не удалось удалить контакт.", "Ошибка");
+            }
         }
 
         private bool CanDeleteContact(Contact? contact)
         {
-            return contact != null;
+            return contact != null && !IsLoading;
         }
 
         private void EditContact(Contact? contact)
@@ -154,13 +190,12 @@ namespace PhoneBook.ViewModels
             if (contact == null)
                 return;
 
-            // Навигация к экрану редактирования с передачей контакта
             _navigationService.NavigateTo<ContactEditViewModel>(contact);
         }
 
         private bool CanEditContact(Contact? contact)
         {
-            return contact != null;
+            return contact != null && !IsLoading;
         }
     }
 }
