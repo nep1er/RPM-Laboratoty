@@ -1,32 +1,34 @@
 ﻿using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using Microsoft.EntityFrameworkCore;
+using PhoneBook.Data;
 using PhoneBook.Models;
 using PhoneBook.Services;
 
 namespace PhoneBook.ViewModels
 {
-    /// <summary>
-    /// ViewModel для экрана списка контактов с интеграцией базы данных.
-    /// </summary>
     public class ContactsListViewModel : ObservableObject, INavigationAware
     {
+        private readonly PhoneBookDbContext _context;
         private readonly IDialogService _dialogService;
         private readonly INavigationService _navigationService;
-        private readonly IContactRepository _contactRepository;
 
         private ObservableCollection<Contact> _contacts = new();
         private string _name = string.Empty;
         private string _phone = string.Empty;
+        private string _searchText = string.Empty;
         private Contact? _selectedContact;
-        private bool _isLoading;
 
+        // Коллекция для отображения (фильтруемая)
         public ObservableCollection<Contact> Contacts
         {
             get => _contacts;
             private set => Set(ref _contacts, value);
         }
 
+        // Поля ввода
         public string Name
         {
             get => _name;
@@ -39,163 +41,221 @@ namespace PhoneBook.ViewModels
             set => Set(ref _phone, value);
         }
 
+        // Поиск/фильтрация
+        public string SearchText
+        {
+            get => _searchText;
+            set
+            {
+                if (Set(ref _searchText, value))
+                {
+                    ApplyFilter();
+                }
+            }
+        }
+
         public Contact? SelectedContact
         {
             get => _selectedContact;
             set => Set(ref _selectedContact, value);
         }
 
-        public bool IsLoading
-        {
-            get => _isLoading;
-            private set => Set(ref _isLoading, value);
-        }
-
+        // Команды
         public ICommand AddCommand { get; }
         public ICommand DeleteCommand { get; }
-        public ICommand EditContactCommand { get; }
-        public ICommand RefreshCommand { get; }
+        public ICommand EditCommand { get; }
+        public ICommand SearchCommand { get; }
 
         public ContactsListViewModel(
+            PhoneBookDbContext context,
             IDialogService dialogService,
-            INavigationService navigationService,
-            IContactRepository contactRepository)
+            INavigationService navigationService)
         {
-            _dialogService = dialogService
-                ?? throw new System.ArgumentNullException(nameof(dialogService));
-            _navigationService = navigationService
-                ?? throw new System.ArgumentNullException(nameof(navigationService));
-            _contactRepository = contactRepository
-                ?? throw new System.ArgumentNullException(nameof(contactRepository));
+            _context = context ?? throw new System.ArgumentNullException(nameof(context));
+            _dialogService = dialogService ?? throw new System.ArgumentNullException(nameof(dialogService));
+            _navigationService = navigationService ?? throw new System.ArgumentNullException(nameof(navigationService));
 
-            // Асинхронные команды для работы с БД
             AddCommand = new AsyncRelayCommand(AddContactAsync, CanAddContact);
             DeleteCommand = new AsyncRelayCommand<Contact>(DeleteContactAsync, CanDeleteContact);
-            EditContactCommand = new RelayCommand<Contact>(EditContact, CanEditContact);
-            RefreshCommand = new AsyncRelayCommand(LoadContactsAsync);
+            EditCommand = new RelayCommand<Contact>(EditContact, CanEditContact);
+            SearchCommand = new RelayCommand(ApplyFilter);
         }
 
-        /// <summary>
-        /// Загружает контакты из базы данных при навигации к экрану.
-        /// </summary>
         public async void OnNavigatedTo(object? parameter)
         {
             await LoadContactsAsync();
             Name = string.Empty;
             Phone = string.Empty;
+            SearchText = string.Empty;
             SelectedContact = null;
         }
 
-        /// <summary>
-        /// Загрузка контактов из базы данных.
-        /// </summary>
         private async Task LoadContactsAsync()
         {
-            IsLoading = true;
             try
             {
-                Contacts = await _contactRepository.GetAllContactsAsync();
+                var entities = await _context.Contacts.ToListAsync();
+
+                var contacts = entities.Select(Contact.FromEntity).ToList();
+                Contacts = new ObservableCollection<Contact>(contacts);
+            }
+            catch (DbUpdateException ex)
+            {
+                _dialogService.ShowError($"Ошибка чтения: {ex.InnerException?.Message ?? ex.Message}", "Ошибка БД");
             }
             catch (System.Exception ex)
             {
-                _dialogService.ShowError($"Ошибка загрузки: {ex.Message}", "Ошибка");
-            }
-            finally
-            {
-                IsLoading = false;
+                _dialogService.ShowError($"Ошибка: {ex.Message}", "Ошибка");
             }
         }
 
+        /// <summary>
+        /// Фильтрация контактов по имени или телефону (на стороне клиента).
+        /// </summary>
+        private void ApplyFilter()
+        {
+            if (string.IsNullOrWhiteSpace(SearchText))
+            {
+                // Если поиск пустой — перезагружаем все контакты
+                _ = LoadContactsAsync();
+                return;
+            }
+
+            // Фильтрация уже загруженной коллекции
+            var filtered = Contacts
+                .Where(c => c.Name.Contains(SearchText, System.StringComparison.OrdinalIgnoreCase) ||
+                           c.Phone.Contains(SearchText, System.StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            // Создаём новую коллекцию для обновления UI
+            Contacts = new ObservableCollection<Contact>(filtered);
+        }
+
+        /// <summary>
+        /// CREATE: Добавление нового контакта в базу данных.
+        /// </summary>
         private async Task AddContactAsync()
         {
             if (!CanAddContact())
                 return;
 
-            if (await _contactRepository.ContactWithPhoneExistsAsync(Phone))
+            // Проверка на дубликат: загружаем данные в память, затем фильтруем
+            var normalizedPhone = NormalizePhone(Phone);
+
+            // 1. Загружаем контакты из БД в память
+            var contacts = await _context.Contacts.ToListAsync();
+
+            // 2. Применяем нормализацию и сравнение уже в памяти
+            var exists = contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone);
+
+            if (exists)
             {
-                _dialogService.ShowWarning(
-                    "Контакт с таким номером телефона уже существует!", "Дубликат");
+                _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
                 return;
             }
 
+            // Валидация
             var contact = new Contact(Name, Phone);
-
             if (!contact.Validate())
             {
-                _dialogService.ShowError(
-                    "Проверьте корректность введённых данных.", "Ошибка валидации");
+                _dialogService.ShowError("Проверьте корректность данных.", "Ошибка валидации");
                 return;
             }
 
-            var result = await _contactRepository.AddContactAsync(contact);
-
-            if (result)
+            try
             {
-                // Обновляем локальную коллекцию
+                // 1. Создаём сущность БД
+                var entity = contact.ToEntity();
+
+                // 2. Добавляем в DbSet — состояние: Added
+                _context.Contacts.Add(entity);
+
+                // 3. Сохраняем изменения — генерируется INSERT
+                await _context.SaveChangesAsync();
+
+                // 4. Обновляем локальную коллекцию и интерфейс
+                contact.Id = entity.Id;
                 Contacts.Add(contact);
 
                 Name = string.Empty;
                 Phone = string.Empty;
 
-                _dialogService.ShowInfo(
-                    $"Контакт \"{contact.Name}\" успешно добавлен.", "Успех");
+                _dialogService.ShowInfo($"Контакт \"{contact.Name}\" добавлен.", "Успех");
             }
-            else
+            catch (DbUpdateException ex)
             {
-                _dialogService.ShowError("Не удалось добавить контакт.", "Ошибка");
+                _dialogService.ShowError($"Не удалось добавить: {ex.InnerException?.Message ?? ex.Message}", "Ошибка БД");
+            }
+            catch (System.Exception ex)
+            {
+                _dialogService.ShowError($"Ошибка: {ex.Message}", "Ошибка");
             }
         }
 
-        private bool CanAddContact()
-        {
-            return !string.IsNullOrWhiteSpace(Name) &&
-                   !string.IsNullOrWhiteSpace(Phone) &&
-                   !IsLoading;
-        }
+        private bool CanAddContact() =>
+            !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Phone);
 
         private async Task DeleteContactAsync(Contact? contact)
         {
             if (contact == null)
                 return;
 
-            bool confirmed = _dialogService.ShowConfirmation(
-                $"Вы действительно хотите удалить контакт \"{contact.Name}\"?",
-                "Подтверждение удаления");
-
-            if (!confirmed)
+            if (!_dialogService.ShowConfirmation($"Удалить \"{contact.Name}\"?", "Подтверждение"))
                 return;
 
-            var result = await _contactRepository.DeleteContactAsync(contact.Id);
-
-            if (result)
+            try
             {
+                var entity = await _context.Contacts.FindAsync(contact.Id);
+                if (entity == null)
+                {
+                    _dialogService.ShowError("Контакт не найден в базе.", "Ошибка");
+                    return;
+                }
+
+                _context.Contacts.Remove(entity);
+
+                await _context.SaveChangesAsync();
+
+                // 4. Обновляем UI
                 Contacts.Remove(contact);
-                _dialogService.ShowInfo(
-                    $"Контакт \"{contact.Name}\" удалён.", "Удалено");
                 SelectedContact = null;
+
+                _dialogService.ShowInfo("Контакт удалён.", "Удалено");
             }
-            else
+            catch (DbUpdateException ex)
             {
-                _dialogService.ShowError("Не удалось удалить контакт.", "Ошибка");
+                _dialogService.ShowError($"Не удалось удалить: {ex.InnerException?.Message ?? ex.Message}", "Ошибка БД");
+            }
+            catch (System.Exception ex)
+            {
+                _dialogService.ShowError($"Ошибка: {ex.Message}", "Ошибка");
             }
         }
 
-        private bool CanDeleteContact(Contact? contact)
-        {
-            return contact != null && !IsLoading;
-        }
+        private bool CanDeleteContact(Contact? contact) => contact != null;
 
+        /// <summary>
+        /// Переход к редактированию контакта.
+        /// </summary>
         private void EditContact(Contact? contact)
         {
-            if (contact == null)
-                return;
-
-            _navigationService.NavigateTo<ContactEditViewModel>(contact);
+            if (contact != null)
+            {
+                // Передаём контакт как параметр навигации
+                _navigationService.NavigateTo<ContactEditViewModel>(contact);
+            }
         }
 
-        private bool CanEditContact(Contact? contact)
+        private bool CanEditContact(Contact? contact) => contact != null;
+
+        /// <summary>
+        /// Нормализация номера для сравнения.
+        /// </summary>
+        private static string NormalizePhone(string phone)
         {
-            return contact != null && !IsLoading;
+            return phone?.Replace(" ", "").Replace("-", "")
+                         .Replace("(", "").Replace(")", "")
+                         .Replace("+", "") ?? string.Empty;
         }
     }
 }

@@ -18,13 +18,12 @@ namespace PhoneBook.Views
         /// </summary>
         private void DataGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            // Находим DataContext (это ContactsListViewModel)
             if (DataContext is ViewModels.ContactsListViewModel vm)
             {
-                // Проверяем, что есть выбранный контакт
-                if (vm.SelectedContact != null && vm.EditContactCommand.CanExecute(null))
+                // ✅ Правильно: передаём SelectedContact в CanExecute
+                if (vm.SelectedContact != null && vm.EditCommand.CanExecute(vm.SelectedContact))
                 {
-                    vm.EditContactCommand.Execute(vm.SelectedContact);
+                    vm.EditCommand.Execute(vm.SelectedContact);
                 }
             }
         }
