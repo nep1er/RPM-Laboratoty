@@ -18,13 +18,11 @@ namespace PhoneBook
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<INavigationService, NavigationService>();
 
-            //Регистрация DbContext (Scoped)
-            services.AddDbContext<PhoneBookDbContext>(options =>
+            services.AddDbContextFactory<PhoneBookDbContext>(options =>
                 options.UseSqlServer(
                     "Data Source=.\\SQLEXPRESS;Initial Catalog=PhoneBookDB;Integrated Security=True;TrustServerCertificate=True",
                     sqlOptions => sqlOptions.EnableRetryOnFailure()));
 
-            //ViewModel — теперь получают DbContext напрямую
             services.AddTransient<ContactsListViewModel>();
             services.AddTransient<ContactEditViewModel>();
             services.AddTransient<AboutViewModel>();

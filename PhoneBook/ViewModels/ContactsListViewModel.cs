@@ -11,7 +11,7 @@ namespace PhoneBook.ViewModels
 {
     public class ContactsListViewModel : ObservableObject, INavigationAware
     {
-        private readonly PhoneBookDbContext _context;
+        private readonly IDbContextFactory<PhoneBookDbContext> _contextFactory;
         private readonly IDialogService _dialogService;
         private readonly INavigationService _navigationService;
 
@@ -21,14 +21,12 @@ namespace PhoneBook.ViewModels
         private string _searchText = string.Empty;
         private Contact? _selectedContact;
 
-        // Коллекция для отображения (фильтруемая)
         public ObservableCollection<Contact> Contacts
         {
             get => _contacts;
             private set => Set(ref _contacts, value);
         }
 
-        // Поля ввода
         public string Name
         {
             get => _name;
@@ -41,7 +39,6 @@ namespace PhoneBook.ViewModels
             set => Set(ref _phone, value);
         }
 
-        // Поиск/фильтрация
         public string SearchText
         {
             get => _searchText;
@@ -60,18 +57,17 @@ namespace PhoneBook.ViewModels
             set => Set(ref _selectedContact, value);
         }
 
-        // Команды
         public ICommand AddCommand { get; }
         public ICommand DeleteCommand { get; }
         public ICommand EditCommand { get; }
         public ICommand SearchCommand { get; }
 
         public ContactsListViewModel(
-            PhoneBookDbContext context,
+            IDbContextFactory<PhoneBookDbContext> contextFactory,
             IDialogService dialogService,
             INavigationService navigationService)
         {
-            _context = context ?? throw new System.ArgumentNullException(nameof(context));
+            _contextFactory = contextFactory ?? throw new System.ArgumentNullException(nameof(contextFactory));
             _dialogService = dialogService ?? throw new System.ArgumentNullException(nameof(dialogService));
             _navigationService = navigationService ?? throw new System.ArgumentNullException(nameof(navigationService));
 
@@ -90,12 +86,20 @@ namespace PhoneBook.ViewModels
             SelectedContact = null;
         }
 
+        /// <summary>
+        /// READ: Загрузка контактов через короткоживущий контекст.
+        /// </summary>
         private async Task LoadContactsAsync()
         {
             try
             {
-                var entities = await _context.Contacts.ToListAsync();
+                // Создаём новый контекст только для этой операции
+                using var context = _contextFactory.CreateDbContext();
 
+                // Загружаем данные и сразу материализуем их в память
+                var entities = await context.Contacts.ToListAsync();
+
+                // Конвертируем в модели ViewModel
                 var contacts = entities.Select(Contact.FromEntity).ToList();
                 Contacts = new ObservableCollection<Contact>(contacts);
             }
@@ -109,52 +113,43 @@ namespace PhoneBook.ViewModels
             }
         }
 
-        /// <summary>
-        /// Фильтрация контактов по имени или телефону (на стороне клиента).
-        /// </summary>
         private void ApplyFilter()
         {
             if (string.IsNullOrWhiteSpace(SearchText))
             {
-                // Если поиск пустой — перезагружаем все контакты
                 _ = LoadContactsAsync();
                 return;
             }
 
-            // Фильтрация уже загруженной коллекции
             var filtered = Contacts
                 .Where(c => c.Name.Contains(SearchText, System.StringComparison.OrdinalIgnoreCase) ||
                            c.Phone.Contains(SearchText, System.StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            // Создаём новую коллекцию для обновления UI
             Contacts = new ObservableCollection<Contact>(filtered);
         }
 
         /// <summary>
-        /// CREATE: Добавление нового контакта в базу данных.
+        /// CREATE: Добавление контакта через новый контекст.
         /// </summary>
         private async Task AddContactAsync()
         {
             if (!CanAddContact())
                 return;
 
-            // Проверка на дубликат: загружаем данные в память, затем фильтруем
+            // Проверка на дубликат: создаём отдельный контекст для запроса
             var normalizedPhone = NormalizePhone(Phone);
 
-            // 1. Загружаем контакты из БД в память
-            var contacts = await _context.Contacts.ToListAsync();
-
-            // 2. Применяем нормализацию и сравнение уже в памяти
-            var exists = contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone);
-
-            if (exists)
+            using (var checkContext = _contextFactory.CreateDbContext())
             {
-                _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
-                return;
+                var contacts = await checkContext.Contacts.ToListAsync();
+                if (contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone))
+                {
+                    _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
+                    return;
+                }
             }
 
-            // Валидация
             var contact = new Contact(Name, Phone);
             if (!contact.Validate())
             {
@@ -164,16 +159,14 @@ namespace PhoneBook.ViewModels
 
             try
             {
-                // 1. Создаём сущность БД
+                // Создаём новый контекст для операции вставки
+                using var context = _contextFactory.CreateDbContext();
+
                 var entity = contact.ToEntity();
+                context.Contacts.Add(entity);
+                await context.SaveChangesAsync();
 
-                // 2. Добавляем в DbSet — состояние: Added
-                _context.Contacts.Add(entity);
-
-                // 3. Сохраняем изменения — генерируется INSERT
-                await _context.SaveChangesAsync();
-
-                // 4. Обновляем локальную коллекцию и интерфейс
+                // Обновляем UI
                 contact.Id = entity.Id;
                 Contacts.Add(contact);
 
@@ -195,6 +188,9 @@ namespace PhoneBook.ViewModels
         private bool CanAddContact() =>
             !string.IsNullOrWhiteSpace(Name) && !string.IsNullOrWhiteSpace(Phone);
 
+        /// <summary>
+        /// DELETE: Удаление через новый контекст.
+        /// </summary>
         private async Task DeleteContactAsync(Contact? contact)
         {
             if (contact == null)
@@ -205,18 +201,19 @@ namespace PhoneBook.ViewModels
 
             try
             {
-                var entity = await _context.Contacts.FindAsync(contact.Id);
+                using var context = _contextFactory.CreateDbContext();
+
+                // Загружаем сущность в новом контексте для отслеживания
+                var entity = await context.Contacts.FindAsync(contact.Id);
                 if (entity == null)
                 {
                     _dialogService.ShowError("Контакт не найден в базе.", "Ошибка");
                     return;
                 }
 
-                _context.Contacts.Remove(entity);
+                context.Contacts.Remove(entity);
+                await context.SaveChangesAsync();
 
-                await _context.SaveChangesAsync();
-
-                // 4. Обновляем UI
                 Contacts.Remove(contact);
                 SelectedContact = null;
 
@@ -234,23 +231,16 @@ namespace PhoneBook.ViewModels
 
         private bool CanDeleteContact(Contact? contact) => contact != null;
 
-        /// <summary>
-        /// Переход к редактированию контакта.
-        /// </summary>
         private void EditContact(Contact? contact)
         {
             if (contact != null)
             {
-                // Передаём контакт как параметр навигации
                 _navigationService.NavigateTo<ContactEditViewModel>(contact);
             }
         }
 
         private bool CanEditContact(Contact? contact) => contact != null;
 
-        /// <summary>
-        /// Нормализация номера для сравнения.
-        /// </summary>
         private static string NormalizePhone(string phone)
         {
             return phone?.Replace(" ", "").Replace("-", "")

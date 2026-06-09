@@ -9,7 +9,7 @@ namespace PhoneBook.ViewModels
 {
     public class ContactEditViewModel : ObservableObject, INavigationAware
     {
-        private readonly PhoneBookDbContext _context;
+        private readonly IDbContextFactory<PhoneBookDbContext> _contextFactory;
         private readonly IDialogService _dialogService;
         private readonly INavigationService _navigationService;
 
@@ -42,11 +42,11 @@ namespace PhoneBook.ViewModels
         public ICommand CancelCommand { get; }
 
         public ContactEditViewModel(
-            PhoneBookDbContext context,
+            IDbContextFactory<PhoneBookDbContext> contextFactory,
             IDialogService dialogService,
             INavigationService navigationService)
         {
-            _context = context ?? throw new System.ArgumentNullException(nameof(context));
+            _contextFactory = contextFactory ?? throw new System.ArgumentNullException(nameof(contextFactory));
             _dialogService = dialogService ?? throw new System.ArgumentNullException(nameof(dialogService));
             _navigationService = navigationService ?? throw new System.ArgumentNullException(nameof(navigationService));
 
@@ -58,6 +58,7 @@ namespace PhoneBook.ViewModels
         {
             if (parameter is Contact contact && contact.Id > 0)
             {
+                // РЕДАКТИРОВАНИЕ: используем переданный контакт для отображения
                 _contact = contact;
                 EditName = contact.Name;
                 EditPhone = contact.Phone;
@@ -65,6 +66,7 @@ namespace PhoneBook.ViewModels
             }
             else
             {
+                // СОЗДАНИЕ: новый пустой контакт
                 _isNewContact = true;
                 _contact = new Contact();
                 EditName = string.Empty;
@@ -115,15 +117,24 @@ namespace PhoneBook.ViewModels
             }
         }
 
+        /// <summary>
+        /// CREATE: Добавление нового контакта.
+        /// </summary>
         private async Task CreateNewContactAsync()
         {
             var normalizedPhone = NormalizePhone(EditPhone);
-            var contacts = await _context.Contacts.ToListAsync();
-            if (contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone))
+
+            using (var checkContext = _contextFactory.CreateDbContext())
             {
-                _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
-                return;
+                var contacts = await checkContext.Contacts.ToListAsync();
+                if (contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone))
+                {
+                    _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
+                    return;
+                }
             }
+
+            using var context = _contextFactory.CreateDbContext();
 
             var entity = new ContactEntity
             {
@@ -131,37 +142,55 @@ namespace PhoneBook.ViewModels
                 Phone = EditPhone.Trim()
             };
 
-            _context.Contacts.Add(entity);
-            await _context.SaveChangesAsync();
+            context.Contacts.Add(entity);
+            await context.SaveChangesAsync();
 
             _dialogService.ShowInfo($"Контакт \"{entity.Name}\" создан.", "Успех");
             _navigationService.NavigateTo<ContactsListViewModel>();
         }
 
+        /// <summary>
+        /// UPDATE: Паттерн Fetch-Modify-Save для работы с отсоединёнными сущностями.
+        /// 1. FETCH: Загружаем актуальную сущность в НОВОМ контексте
+        /// 2. MODIFY: Применяем изменения из ViewModel
+        /// 3. SAVE: Сохраняем через тот же контекст
+        /// </summary>
         private async Task UpdateExistingContactAsync()
         {
             if (_contact == null || _contact.Id <= 0)
                 return;
 
+            // Проверка на дубликат (в отдельном контексте)
             var normalizedPhone = NormalizePhone(EditPhone);
-            var contacts = await _context.Contacts.ToListAsync();
-            if (contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone && c.Id != _contact.Id))
+            using (var checkContext = _contextFactory.CreateDbContext())
             {
-                _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
-                return;
+                var contacts = await checkContext.Contacts.ToListAsync();
+                if (contacts.Any(c => NormalizePhone(c.Phone) == normalizedPhone && c.Id != _contact.Id))
+                {
+                    _dialogService.ShowWarning("Контакт с таким номером уже существует!", "Дубликат");
+                    return;
+                }
             }
 
-            var entity = await _context.Contacts.FindAsync(_contact.Id);
+            // Создаём НОВЫЙ контекст для операции обновления
+            using var context = _contextFactory.CreateDbContext();
+
+            // 1. FETCH: Загружаем сущность из БД — теперь она отслеживается этим контекстом
+            var entity = await context.Contacts.FindAsync(_contact.Id);
             if (entity == null)
             {
                 _dialogService.ShowError("Контакт не найден.", "Ошибка");
                 return;
             }
 
+            // 2. MODIFY: Применяем изменения из ViewModel к отслеживаемой сущности
             entity.Name = EditName.Trim();
             entity.Phone = EditPhone.Trim();
 
-            await _context.SaveChangesAsync();
+            // Change Tracker автоматически пометит сущность как Modified
+
+            // 3. SAVE: Фиксируем изменения
+            await context.SaveChangesAsync();
 
             _dialogService.ShowInfo($"Контакт \"{entity.Name}\" обновлён.", "Успех");
             _navigationService.NavigateTo<ContactsListViewModel>();
